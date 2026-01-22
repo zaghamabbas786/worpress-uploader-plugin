@@ -23,8 +23,8 @@ define('WARZONE_UPLOADER_MAX_FILE_SIZE', 5 * 1024 * 1024 * 1024); // 5GB max fil
 define('WARZONE_UPLOADS_PER_IP_PER_DAY', 5); // Max uploads per IP per 24 hours
 define('WARZONE_RECAPTCHA_ENABLED', true); // Enable/disable reCAPTCHA
 // reCAPTCHA v3 keys - can be overridden in Settings → Warzone Uploader
-define('WARZONE_RECAPTCHA_SITE_KEY', get_option('warzone_recaptcha_site_key', ''));
-define('WARZONE_RECAPTCHA_SECRET_KEY', get_option('warzone_recaptcha_secret_key', ''));
+define('WARZONE_RECAPTCHA_SITE_KEY', get_option('warzone_recaptcha_site_key', '6LfPD1IsAAAAAFjWG6ZU868WgwcmkCdRuRQD6j7t'));
+define('WARZONE_RECAPTCHA_SECRET_KEY', get_option('warzone_recaptcha_secret_key', '6LfPD1IsAAAAAH95Fz1nXzy4v9Kg-spfRUzMmL_f'));
 
 // Include the Google Drive handler
 require_once WARZONE_UPLOADER_PATH . 'includes/class-google-drive-uploader.php';

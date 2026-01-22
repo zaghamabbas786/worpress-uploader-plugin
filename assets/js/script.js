@@ -469,7 +469,6 @@
                 const mostDataSent = (start >= currentFile.size * 0.9); // 90%+ already uploaded
                 
                 if (isLastChunk && mostDataSent) {
-                    console.log('⚡ LAST CHUNK: Network down but data likely sent - skipping retries');
                     console.log('📝 File should be in Google Drive - proceeding to finalize');
                     result.success = true;
                     break;
