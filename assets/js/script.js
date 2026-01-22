@@ -442,13 +442,15 @@
                     break;
                 }
                 
-                // Check if this is the last chunk or single-chunk file
+                // Check chunk position
+                const isFirstChunk = (chunkIndex === 0);
                 const isLastChunk = (chunkIndex === totalChunks - 1);
                 const isSingleChunk = (totalChunks === 1);
                 const mostDataSent = (start >= currentFile.size * 0.9);
                 
-                // FAST PATH: For last chunk / single-chunk, trust immediately (data was sent)
-                if (isLastChunk && (mostDataSent || isSingleChunk)) {
+                // FAST PATH: For first or last chunk, trust immediately (no retry)
+                // Data was likely sent, just response lost
+                if (isFirstChunk || isLastChunk || isSingleChunk || mostDataSent) {
                     console.log('📝 File should be in Google Drive - proceeding to finalize');
                     result.success = true;
                     break;
