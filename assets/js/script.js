@@ -504,44 +504,70 @@
     /**
      * Check upload status from Google Drive (for recovery)
      * Returns: { bytesUploaded: number, complete: boolean }
+     * Retries up to 3 times with delays
      */
-    function checkUploadStatus() {
-        return new Promise((resolve) => {
-            const xhr = new XMLHttpRequest();
+    async function checkUploadStatus() {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            console.log(`📡 Status check attempt ${attempt}/3...`);
             
-            xhr.addEventListener('load', () => {
-                if (xhr.status === 308) {
-                    // Upload incomplete - check Range header for bytes uploaded
-                    const range = xhr.getResponseHeader('Range');
-                    if (range) {
-                        // Range format: "bytes=0-12345"
-                        const match = range.match(/bytes=0-(\d+)/);
-                        if (match) {
-                            const bytesUploaded = parseInt(match[1], 10) + 1;
-                            console.log(`📊 Google says ${bytesUploaded} bytes uploaded`);
-                            resolve({ bytesUploaded, complete: false });
-                            return;
+            const result = await new Promise((resolve) => {
+                const xhr = new XMLHttpRequest();
+                xhr.timeout = 30000; // 30 second timeout
+                
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 308) {
+                        // Upload incomplete - check Range header for bytes uploaded
+                        const range = xhr.getResponseHeader('Range');
+                        if (range) {
+                            // Range format: "bytes=0-12345"
+                            const match = range.match(/bytes=0-(\d+)/);
+                            if (match) {
+                                const bytesUploaded = parseInt(match[1], 10) + 1;
+                                console.log(`📊 Google says ${(bytesUploaded / 1024 / 1024).toFixed(1)}MB uploaded`);
+                                resolve({ bytesUploaded, complete: false, success: true });
+                                return;
+                            }
                         }
+                        resolve({ bytesUploaded: 0, complete: false, success: true });
+                    } else if (xhr.status === 200 || xhr.status === 201) {
+                        // Upload already complete!
+                        console.log('✅ Google says upload is COMPLETE!');
+                        resolve({ bytesUploaded: currentFile.size, complete: true, success: true });
+                    } else {
+                        console.log(`⚠️ Status check returned: ${xhr.status}`);
+                        resolve({ bytesUploaded: -1, complete: false, success: false });
                     }
-                    resolve({ bytesUploaded: 0, complete: false });
-                } else if (xhr.status === 200 || xhr.status === 201) {
-                    // Upload already complete!
-                    console.log('✅ Google says upload is COMPLETE!');
-                    resolve({ bytesUploaded: currentFile.size, complete: true });
-                } else {
-                    console.log(`⚠️ Status check returned: ${xhr.status}`);
-                    resolve({ bytesUploaded: -1, complete: false });
-                }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    console.log(`❌ Status check error (attempt ${attempt})`);
+                    resolve({ bytesUploaded: -1, complete: false, success: false });
+                });
+                
+                xhr.addEventListener('timeout', () => {
+                    console.log(`⏱️ Status check timeout (attempt ${attempt})`);
+                    resolve({ bytesUploaded: -1, complete: false, success: false });
+                });
+                
+                xhr.open('PUT', uploadUri);
+                xhr.setRequestHeader('Content-Range', `bytes */${currentFile.size}`);
+                xhr.send();
             });
             
-            xhr.addEventListener('error', () => {
-                resolve({ bytesUploaded: -1, complete: false });
-            });
+            if (result.success) {
+                return result;
+            }
             
-            xhr.open('PUT', uploadUri);
-            xhr.setRequestHeader('Content-Range', `bytes */${currentFile.size}`);
-            xhr.send();
-        });
+            // Wait before retry (2s, 4s, 8s)
+            if (attempt < 3) {
+                const delay = 2000 * Math.pow(2, attempt - 1);
+                console.log(`⏳ Waiting ${delay/1000}s before next status check...`);
+                await sleep(delay);
+            }
+        }
+        
+        console.log('❌ All status check attempts failed');
+        return { bytesUploaded: -1, complete: false, success: false };
     }
 
     /**
