@@ -442,26 +442,17 @@
                     break;
                 }
                 
-                // Retry on recoverable errors with exponential backoff
-                if (result.data.recoverable && retryCount < MAX_RETRIES - 1) {
-                    retryCount++;
-                    // Exponential backoff: 2s, 4s, 8s, 16s... capped at RETRY_DELAY_MAX
-                    const delay = Math.min(RETRY_DELAY_BASE * Math.pow(2, retryCount - 1), RETRY_DELAY_MAX);
-                    console.log(`⚠️ Chunk ${chunkIndex + 1} failed, retrying in ${delay/1000}s (${retryCount}/${MAX_RETRIES})...`);
-                    showProgress(
-                        Math.round((chunkIndex / totalChunks) * 100),
-                        `RETRY ${retryCount}/${MAX_RETRIES}...`
-                    );
-                    await sleep(delay);
-                    continue;
-                }
+                // IMMEDIATELY check with Google - maybe data was received but response lost
+                console.log(`⚠️ Chunk ${chunkIndex + 1} failed - checking with Google...`);
+                showProgress(
+                    Math.round((chunkIndex / totalChunks) * 100),
+                    `VERIFYING...`
+                );
                 
-                // Before giving up, check if Google already has the data
-                console.log('🔍 Checking upload status with Google...');
                 const status = await checkUploadStatus();
                 
                 if (status.complete) {
-                    console.log('✅ Google confirms upload is COMPLETE despite error!');
+                    console.log('✅ Google confirms upload is COMPLETE!');
                     result.success = true;
                     break;
                 }
@@ -470,6 +461,19 @@
                     console.log(`✅ Google confirms chunk ${chunkIndex + 1} was received!`);
                     result.success = true;
                     break;
+                }
+                
+                // Google doesn't have the data - retry if we haven't exhausted attempts
+                if (result.data.recoverable && retryCount < MAX_RETRIES - 1) {
+                    retryCount++;
+                    const delay = Math.min(RETRY_DELAY_BASE * Math.pow(2, retryCount - 1), RETRY_DELAY_MAX);
+                    console.log(`🔄 Google needs data, retrying in ${delay/1000}s (${retryCount}/${MAX_RETRIES})...`);
+                    showProgress(
+                        Math.round((chunkIndex / totalChunks) * 100),
+                        `RETRY ${retryCount}/${MAX_RETRIES}...`
+                    );
+                    await sleep(delay);
+                    continue;
                 }
                 
                 throw new Error(result.data.message || 'Chunk upload failed');
