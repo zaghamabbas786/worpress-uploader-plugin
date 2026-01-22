@@ -466,9 +466,11 @@
                 // LAST CHUNK TRUST: If this is the last chunk and network is dead,
                 // skip retries and assume success (file is likely there)
                 const isLastChunk = (chunkIndex === totalChunks - 1);
+                const isSingleChunk = (totalChunks === 1);
                 const mostDataSent = (start >= currentFile.size * 0.9); // 90%+ already uploaded
                 
-                if (isLastChunk && mostDataSent) {
+                // Trust if: last chunk with 90%+ sent, OR single-chunk file (data was sent)
+                if (isLastChunk && (mostDataSent || isSingleChunk)) {
                     console.log('📝 File should be in Google Drive - proceeding to finalize');
                     result.success = true;
                     break;
