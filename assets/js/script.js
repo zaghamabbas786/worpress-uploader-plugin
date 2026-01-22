@@ -6,11 +6,13 @@
 (function($) {
     'use strict';
 
+    console.log('🎮 Warzone Uploader v2.0 - DIRECT Google Drive Uploads');
+    
     // Configuration from WordPress
     const config = window.warzoneUploader || {};
     // Ensure CHUNK_SIZE is a number (parseInt fixes string concatenation bug)
-    const CHUNK_SIZE = parseInt(config.chunkSize, 10) || (2 * 1024 * 1024); // 2MB default
-    console.log('CHUNK_SIZE configured as:', CHUNK_SIZE, 'bytes (' + (CHUNK_SIZE / 1024 / 1024) + 'MB)');
+    const CHUNK_SIZE = parseInt(config.chunkSize, 10) || (16 * 1024 * 1024); // 16MB default
+    console.log('⚙️ CHUNK_SIZE:', CHUNK_SIZE, 'bytes (' + (CHUNK_SIZE / 1024 / 1024) + 'MB)');
     const MAX_FILE_SIZE = config.maxFileSize || 5 * 1024 * 1024 * 1024; // 5GB
     const ALLOWED_TYPES = config.allowedTypes || ['video/mp4', 'video/quicktime'];
     const i18n = config.i18n || {};
@@ -19,9 +21,6 @@
     const MAX_RETRIES = 3;
     const RETRY_DELAY_BASE = 1000;
     const RETRY_DELAY_MAX = 5000;
-    
-    // Parallel upload configuration
-    const PARALLEL_CHUNKS = 3; // Upload 3 chunks simultaneously
 
     // State
     let currentFile = null;
@@ -319,7 +318,9 @@
             uploadSessionId = initResult.data.session_id;
             uploadUri = initResult.data.upload_uri; // Google Drive resumable upload URI
             
-            console.log('📤 Got upload URI for DIRECT Google Drive upload');
+            console.log('🚀 DIRECT UPLOAD MODE - Version 2.0');
+            console.log('📤 Upload URI (Google Drive):', uploadUri.substring(0, 80) + '...');
+            console.log('✅ Chunks will go DIRECTLY to Google (NOT through WordPress)');
 
             // Step 2: Upload file in chunks DIRECTLY to Google Drive
             console.log('📤 Step 2: Starting DIRECT chunked upload to Google Drive...');
@@ -538,9 +539,15 @@
                 });
             });
             
+            // DIRECT PUT to Google Drive (NOT WordPress)
             xhr.open('PUT', uploadUri);
             xhr.setRequestHeader('Content-Range', contentRange);
             xhr.timeout = 300000; // 5 minutes per chunk
+            
+            if (chunkIndex === 0) {
+                console.log('📡 First chunk going DIRECTLY to:', uploadUri.includes('googleapis.com') ? 'googleapis.com (Google Drive)' : uploadUri);
+            }
+            
             xhr.send(chunk);
         });
     }

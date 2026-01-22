@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WARZONE_UPLOADER_VERSION', '1.0.0');
+define('WARZONE_UPLOADER_VERSION', '2.0.0'); // v2: True direct browser-to-Google uploads
 define('WARZONE_UPLOADER_PATH', plugin_dir_path(__FILE__));
 define('WARZONE_UPLOADER_URL', plugin_dir_url(__FILE__));
 define('WARZONE_UPLOADER_CHUNK_SIZE', 16 * 1024 * 1024); // 16MB chunks for faster uploads
@@ -65,8 +65,8 @@ class Warzone_Uploader {
         add_action('wp_ajax_warzone_init_upload', [$this, 'ajax_init_upload']);
         add_action('wp_ajax_nopriv_warzone_init_upload', [$this, 'ajax_init_upload']);
         
-        add_action('wp_ajax_warzone_upload_chunk', [$this, 'ajax_upload_chunk']);
-        add_action('wp_ajax_nopriv_warzone_upload_chunk', [$this, 'ajax_upload_chunk']);
+        // NOTE: Chunk uploads go DIRECTLY to Google Drive from browser (no WordPress proxy)
+        // Only init and finalize go through WordPress
         
         add_action('wp_ajax_warzone_finalize_upload', [$this, 'ajax_finalize_upload']);
         add_action('wp_ajax_nopriv_warzone_finalize_upload', [$this, 'ajax_finalize_upload']);
@@ -539,103 +539,9 @@ class Warzone_Uploader {
         ]);
     }
     
-    /**
-     * Handle chunk upload
-     */
-    public function ajax_upload_chunk() {
-        // Extend PHP limits for large uploads
-        if (function_exists('set_time_limit')) {
-            @set_time_limit(600); // 10 minutes per chunk
-        }
-        @ini_set('memory_limit', '512M');
-        
-        check_ajax_referer('warzone_upload_nonce', 'nonce');
-        
-        $session_id = sanitize_text_field($_POST['session_id'] ?? '');
-        $chunk_index = intval($_POST['chunk_index'] ?? 0);
-        $total_chunks = intval($_POST['total_chunks'] ?? 0);
-        
-        if (empty($session_id)) {
-            wp_send_json_error(['message' => 'Invalid session.', 'code' => 'invalid_session']);
-        }
-        
-        // Get session data
-        $session = get_transient('warzone_upload_' . $session_id);
-        if (!$session) {
-            wp_send_json_error([
-                'message' => 'Session expired. Please try again.',
-                'code' => 'session_expired'
-            ]);
-        }
-        
-        // Check for uploaded chunk
-        if (!isset($_FILES['chunk']) || $_FILES['chunk']['error'] !== UPLOAD_ERR_OK) {
-            $error_code = $_FILES['chunk']['error'] ?? 'unknown';
-            wp_send_json_error([
-                'message' => 'Chunk upload failed. Error code: ' . $error_code,
-                'code' => 'chunk_error',
-                'php_error' => $error_code,
-                'recoverable' => true // Signal JS to retry
-            ]);
-        }
-        
-        $chunk_data = file_get_contents($_FILES['chunk']['tmp_name']);
-        $chunk_size = strlen($chunk_data);
-        $start_byte = $session['bytes_uploaded'];
-        $end_byte = $start_byte + $chunk_size - 1;
-        
-        // Upload chunk to Google Drive
-        $result = $this->drive_uploader->upload_chunk(
-            $session['upload_uri'],
-            $chunk_data,
-            $start_byte,
-            $end_byte,
-            $session['file_size']
-        );
-        
-        if (is_wp_error($result)) {
-            // Log error for debugging
-            error_log('Warzone Upload Error: ' . $result->get_error_message() . ' (Code: ' . $result->get_error_code() . ')');
-            
-            // Check if this is a recoverable error (network issues, etc.)
-            $error_code = $result->get_error_code();
-            $recoverable = in_array($error_code, ['http_request_failed', 'chunk_failed', 'curl_error']);
-            
-            wp_send_json_error([
-                'message' => $result->get_error_message(),
-                'code' => $error_code,
-                'recoverable' => $recoverable,
-                'bytes_uploaded' => $session['bytes_uploaded'],
-                'debug' => [
-                    'chunk_size' => $chunk_size,
-                    'start_byte' => $start_byte,
-                    'end_byte' => $end_byte,
-                    'total_size' => $session['file_size']
-                ]
-            ]);
-        }
-        
-        // Update session with new byte count
-        $session['bytes_uploaded'] = $end_byte + 1;
-        $session['last_activity'] = time();
-        
-        // Recalculate expiration to extend session
-        $remaining_bytes = $session['file_size'] - $session['bytes_uploaded'];
-        $remaining_chunks = ceil($remaining_bytes / WARZONE_UPLOADER_CHUNK_SIZE);
-        $estimated_remaining = $remaining_chunks * 5; // 5 sec per chunk
-        $expiration = max(DAY_IN_SECONDS, $estimated_remaining * 2);
-        
-        set_transient('warzone_upload_' . $session_id, $session, $expiration);
-        
-        $progress = round(($session['bytes_uploaded'] / $session['file_size']) * 100);
-        
-        wp_send_json_success([
-            'bytes_uploaded' => $session['bytes_uploaded'],
-            'progress' => $progress,
-            'complete' => isset($result['file_id']),
-            'upload_uri' => $session['upload_uri'] // Return for client-side resume capability
-        ]);
-    }
+    // NOTE: ajax_upload_chunk() has been REMOVED
+    // Chunks are now uploaded DIRECTLY from browser to Google Drive
+    // This eliminates the WordPress proxy bottleneck entirely
     
     /**
      * Finalize upload and send notification
