@@ -445,7 +445,7 @@
                 // Retry on recoverable errors with exponential backoff
                 if (result.data.recoverable && retryCount < MAX_RETRIES - 1) {
                     retryCount++;
-                    // Exponential backoff: 1s, 2s, 4s, 8s... capped at RETRY_DELAY_MAX
+                    // Exponential backoff: 2s, 4s, 8s, 16s... capped at RETRY_DELAY_MAX
                     const delay = Math.min(RETRY_DELAY_BASE * Math.pow(2, retryCount - 1), RETRY_DELAY_MAX);
                     console.log(`⚠️ Chunk ${chunkIndex + 1} failed, retrying in ${delay/1000}s (${retryCount}/${MAX_RETRIES})...`);
                     showProgress(
@@ -454,6 +454,22 @@
                     );
                     await sleep(delay);
                     continue;
+                }
+                
+                // Before giving up, check if Google already has the data
+                console.log('🔍 Checking upload status with Google...');
+                const status = await checkUploadStatus();
+                
+                if (status.complete) {
+                    console.log('✅ Google confirms upload is COMPLETE despite error!');
+                    result.success = true;
+                    break;
+                }
+                
+                if (status.bytesUploaded >= end) {
+                    console.log(`✅ Google confirms chunk ${chunkIndex + 1} was received!`);
+                    result.success = true;
+                    break;
                 }
                 
                 throw new Error(result.data.message || 'Chunk upload failed');
@@ -483,6 +499,49 @@
      */
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    /**
+     * Check upload status from Google Drive (for recovery)
+     * Returns: { bytesUploaded: number, complete: boolean }
+     */
+    function checkUploadStatus() {
+        return new Promise((resolve) => {
+            const xhr = new XMLHttpRequest();
+            
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 308) {
+                    // Upload incomplete - check Range header for bytes uploaded
+                    const range = xhr.getResponseHeader('Range');
+                    if (range) {
+                        // Range format: "bytes=0-12345"
+                        const match = range.match(/bytes=0-(\d+)/);
+                        if (match) {
+                            const bytesUploaded = parseInt(match[1], 10) + 1;
+                            console.log(`📊 Google says ${bytesUploaded} bytes uploaded`);
+                            resolve({ bytesUploaded, complete: false });
+                            return;
+                        }
+                    }
+                    resolve({ bytesUploaded: 0, complete: false });
+                } else if (xhr.status === 200 || xhr.status === 201) {
+                    // Upload already complete!
+                    console.log('✅ Google says upload is COMPLETE!');
+                    resolve({ bytesUploaded: currentFile.size, complete: true });
+                } else {
+                    console.log(`⚠️ Status check returned: ${xhr.status}`);
+                    resolve({ bytesUploaded: -1, complete: false });
+                }
+            });
+            
+            xhr.addEventListener('error', () => {
+                resolve({ bytesUploaded: -1, complete: false });
+            });
+            
+            xhr.open('PUT', uploadUri);
+            xhr.setRequestHeader('Content-Range', `bytes */${currentFile.size}`);
+            xhr.send();
+        });
     }
 
     /**
@@ -530,7 +589,14 @@
                 }
             });
             
-            xhr.addEventListener('error', () => {
+            xhr.addEventListener('error', (e) => {
+                console.error(`❌ Chunk ${chunkIndex + 1} XHR error event:`, {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    readyState: xhr.readyState,
+                    responseURL: xhr.responseURL,
+                    event: e
+                });
                 resolve({
                     success: false,
                     data: { message: 'Network error', recoverable: true }
