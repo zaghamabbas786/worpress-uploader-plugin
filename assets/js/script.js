@@ -18,9 +18,9 @@
     const i18n = config.i18n || {};
     
     // Retry configuration for large file reliability
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_BASE = 1000;
-    const RETRY_DELAY_MAX = 5000;
+    const MAX_RETRIES = 5;           // Increased from 3 to 5
+    const RETRY_DELAY_BASE = 2000;   // Increased from 1s to 2s
+    const RETRY_DELAY_MAX = 30000;   // Increased from 5s to 30s
 
     // State
     let currentFile = null;
@@ -468,6 +468,11 @@
             showProgress(progress, `UPLOADING... ${uploadedMB}MB / ${totalMB}MB`);
             
             console.log(`✅ Chunk ${chunkIndex + 1}/${totalChunks} complete`);
+            
+            // Small delay between chunks to avoid rate limiting (100ms)
+            if (chunkIndex < totalChunks - 1) {
+                await sleep(100);
+            }
         }
         
         console.log('🏁 All chunks uploaded successfully!');
