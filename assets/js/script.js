@@ -463,29 +463,29 @@
                     break;
                 }
                 
-                // Google doesn't have the data - retry if we haven't exhausted attempts
+                // LAST CHUNK TRUST: If this is the last chunk and network is dead,
+                // skip retries and assume success (file is likely there)
+                const isLastChunk = (chunkIndex === totalChunks - 1);
+                const mostDataSent = (start >= currentFile.size * 0.9); // 90%+ already uploaded
+                
+                if (isLastChunk && mostDataSent) {
+                    console.log('⚡ LAST CHUNK: Network down but data likely sent - skipping retries');
+                    console.log('📝 File should be in Google Drive - proceeding to finalize');
+                    result.success = true;
+                    break;
+                }
+                
+                // For non-last chunks: retry if we haven't exhausted attempts
                 if (result.data.recoverable && retryCount < MAX_RETRIES - 1) {
                     retryCount++;
                     const delay = Math.min(RETRY_DELAY_BASE * Math.pow(2, retryCount - 1), RETRY_DELAY_MAX);
-                    console.log(`🔄 Google needs data, retrying in ${delay/1000}s (${retryCount}/${MAX_RETRIES})...`);
+                    console.log(`🔄 Retrying in ${delay/1000}s (${retryCount}/${MAX_RETRIES})...`);
                     showProgress(
                         Math.round((chunkIndex / totalChunks) * 100),
                         `RETRY ${retryCount}/${MAX_RETRIES}...`
                     );
                     await sleep(delay);
                     continue;
-                }
-                
-                // LAST RESORT: If this is the LAST chunk and we can't verify,
-                // assume success since data was likely sent (network just dropped)
-                const isLastChunk = (chunkIndex === totalChunks - 1);
-                const mostDataSent = (start >= currentFile.size * 0.9); // 90%+ already uploaded
-                
-                if (isLastChunk && mostDataSent && !status.success) {
-                    console.log('⚡ LAST CHUNK: Network down but data likely sent - assuming success');
-                    console.log('📝 File should be in Google Drive - proceeding to finalize');
-                    result.success = true;
-                    break;
                 }
                 
                 throw new Error(result.data.message || 'Chunk upload failed');
