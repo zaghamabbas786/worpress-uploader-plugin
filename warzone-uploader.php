@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 define('WARZONE_UPLOADER_VERSION', '2.0.0'); // v2: True direct browser-to-Google uploads
 define('WARZONE_UPLOADER_PATH', plugin_dir_path(__FILE__));
 define('WARZONE_UPLOADER_URL', plugin_dir_url(__FILE__));
-define('WARZONE_UPLOADER_CHUNK_SIZE', 32 * 1024 * 1024); // 32MB chunks for faster uploads
+define('WARZONE_UPLOADER_CHUNK_SIZE', 70 * 1024 * 1024); // 70MB chunks for faster uploads
 define('WARZONE_UPLOADER_MAX_FILE_SIZE', 5 * 1024 * 1024 * 1024); // 5GB max file size
 
 // Security Settings

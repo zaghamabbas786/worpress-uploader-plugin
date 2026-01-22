@@ -11,7 +11,7 @@
     // Configuration from WordPress
     const config = window.warzoneUploader || {};
     // Ensure CHUNK_SIZE is a number (parseInt fixes string concatenation bug)
-    const CHUNK_SIZE = parseInt(config.chunkSize, 10) || (32 * 1024 * 1024); // 32MB default
+    const CHUNK_SIZE = parseInt(config.chunkSize, 10) || (70 * 1024 * 1024); // 70MB default
     console.log('⚙️ CHUNK_SIZE:', CHUNK_SIZE, 'bytes (' + (CHUNK_SIZE / 1024 / 1024) + 'MB)');
     const MAX_FILE_SIZE = config.maxFileSize || 5 * 1024 * 1024 * 1024; // 5GB
     const ALLOWED_TYPES = config.allowedTypes || ['video/mp4', 'video/quicktime'];
