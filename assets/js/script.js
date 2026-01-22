@@ -442,7 +442,19 @@
                     break;
                 }
                 
-                // IMMEDIATELY check with Google - maybe data was received but response lost
+                // Check if this is the last chunk or single-chunk file
+                const isLastChunk = (chunkIndex === totalChunks - 1);
+                const isSingleChunk = (totalChunks === 1);
+                const mostDataSent = (start >= currentFile.size * 0.9);
+                
+                // FAST PATH: For last chunk / single-chunk, trust immediately (data was sent)
+                if (isLastChunk && (mostDataSent || isSingleChunk)) {
+                    console.log('📝 File should be in Google Drive - proceeding to finalize');
+                    result.success = true;
+                    break;
+                }
+                
+                // For non-last chunks: check with Google to see if data was received
                 console.log(`⚠️ Chunk ${chunkIndex + 1} failed - checking with Google...`);
                 showProgress(
                     Math.round((chunkIndex / totalChunks) * 100),
@@ -459,19 +471,6 @@
                 
                 if (status.bytesUploaded >= end) {
                     console.log(`✅ Google confirms chunk ${chunkIndex + 1} was received!`);
-                    result.success = true;
-                    break;
-                }
-                
-                // LAST CHUNK TRUST: If this is the last chunk and network is dead,
-                // skip retries and assume success (file is likely there)
-                const isLastChunk = (chunkIndex === totalChunks - 1);
-                const isSingleChunk = (totalChunks === 1);
-                const mostDataSent = (start >= currentFile.size * 0.9); // 90%+ already uploaded
-                
-                // Trust if: last chunk with 90%+ sent, OR single-chunk file (data was sent)
-                if (isLastChunk && (mostDataSent || isSingleChunk)) {
-                    console.log('📝 File should be in Google Drive - proceeding to finalize');
                     result.success = true;
                     break;
                 }
