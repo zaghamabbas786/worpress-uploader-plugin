@@ -23,8 +23,8 @@ define('WARZONE_UPLOADER_MAX_FILE_SIZE', 5 * 1024 * 1024 * 1024); // 5GB max fil
 define('WARZONE_UPLOADS_PER_IP_PER_DAY', 5); // Max uploads per IP per 24 hours
 define('WARZONE_RECAPTCHA_ENABLED', true); // Enable/disable reCAPTCHA
 // reCAPTCHA v3 keys - can be overridden in Settings → Warzone Uploader
-define('WARZONE_RECAPTCHA_SITE_KEY', get_option('warzone_recaptcha_site_key', '6LfPD1IsAAAAAFjWG6ZU868WgwcmkCdRuRQD6j7t'));
-define('WARZONE_RECAPTCHA_SECRET_KEY', get_option('warzone_recaptcha_secret_key', '6LfPD1IsAAAAAH95Fz1nXzy4v9Kg-spfRUzMmL_f'));
+define('WARZONE_RECAPTCHA_SITE_KEY', get_option('warzone_recaptcha_site_key', '6LfC6lMsAAAAAHTCX8rXaeA52N3G5uRQWmurX3hq'));
+define('WARZONE_RECAPTCHA_SECRET_KEY', get_option('warzone_recaptcha_secret_key', '6LfC6lMsAAAAAKKviCNd11it-E59XSL_pqk251hQ'));
 
 // Include the Google Drive handler
 require_once WARZONE_UPLOADER_PATH . 'includes/class-google-drive-uploader.php';
@@ -422,9 +422,66 @@ class Warzone_Uploader {
     }
     
     /**
+     * Send CORS headers to allow cross-origin requests
+     */
+    private function send_cors_headers() {
+        $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+        $current_origin = (is_ssl() ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
+        
+        // Build allowed origins list - include both WP Engine and production domains
+        $allowed_origins = [
+            home_url(),
+            site_url(),
+            $current_origin,
+            'https://warzonewreckin.wpenginepowered.com',
+            'https://www.warzonewreckin.wpenginepowered.com',
+            'http://warzonewreckin.wpenginepowered.com',
+            'http://www.warzonewreckin.wpenginepowered.com',
+            'https://warzonewreckingcrew.com',  // Production domain
+            'https://www.warzonewreckingcrew.com',  // Production domain with www
+            'http://warzonewreckingcrew.com',
+            'http://www.warzonewreckingcrew.com',
+        ];
+        
+        // Normalize URLs for comparison (remove trailing slashes and protocol variations)
+        $allowed_origins = array_map(function($url) {
+            return rtrim($url, '/');
+        }, $allowed_origins);
+        $origin = rtrim($origin, '/');
+        
+        // Log for debugging (remove in production)
+        error_log('Warzone CORS: origin=' . $origin . ', current=' . $current_origin . ', allowed=' . implode(',', $allowed_origins));
+        
+        // If origin is in allowed list, echo it back (browser requirement)
+        if (!empty($origin) && in_array($origin, $allowed_origins)) {
+            header('Access-Control-Allow-Origin: ' . $origin);
+        } elseif (empty($origin)) {
+            // No origin header (same-origin request) - use current origin
+            header('Access-Control-Allow-Origin: ' . $current_origin);
+        } else {
+            // Origin not in allowed list - still allow it for now (can be restricted later)
+            // This handles cases where the domain might vary slightly
+            error_log('Warzone CORS: Unknown origin ' . $origin . ' - allowing anyway');
+            header('Access-Control-Allow-Origin: ' . $origin);
+        }
+        
+        header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-WP-Nonce');
+        header('Access-Control-Max-Age: 86400');
+        
+        // Handle preflight OPTIONS request
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            status_header(200);
+            exit;
+        }
+    }
+    
+    /**
      * Initialize upload - creates resumable upload session on Google Drive
      */
     public function ajax_init_upload() {
+        $this->send_cors_headers();
         check_ajax_referer('warzone_upload_nonce', 'nonce');
         
         // ========== SECURITY CHECK 1: reCAPTCHA Verification ==========
@@ -547,6 +604,7 @@ class Warzone_Uploader {
      * Finalize upload and send notification
      */
     public function ajax_finalize_upload() {
+        $this->send_cors_headers();
         check_ajax_referer('warzone_upload_nonce', 'nonce');
         
         $session_id = sanitize_text_field($_POST['session_id'] ?? '');
@@ -736,6 +794,7 @@ class Warzone_Uploader {
      * Handle contact form submission
      */
     public function ajax_contact_submit() {
+        $this->send_cors_headers();
         check_ajax_referer('warzone_contact_nonce', 'nonce');
         
         $name = sanitize_text_field($_POST['name'] ?? '');
